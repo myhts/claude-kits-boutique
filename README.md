@@ -1,3 +1,9 @@
+> **This is a copy of Google's [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo)**, kept
+> with its full history under the [Apache License 2.0](LICENSE). It's used to prove
+> [claude-kits](https://github.com/myhts/claude-kits) on a real eleven-service app: every feature applied, explained
+> and measured. **Not affiliated with Google.** Changes from the original are made through pull requests here and
+> listed in `docs/claude-kits/` as they land. Everything below this box is Google's original README.
+
 <!-- <p align="center">
 <img src="/src/frontend/static/icons/Hipster_HeroLogoMaroon.svg" width="300" alt="Online Boutique" />
 </p> -->
