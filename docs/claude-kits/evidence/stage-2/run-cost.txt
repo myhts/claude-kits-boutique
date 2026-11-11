@@ -1,0 +1,8 @@
+session b130fac1-d2d0-4457-a5e8-7f2bdb289b85.jsonl
+from 2026-11-10T18:32:48.554Z to 2026-11-10T19:31:38.952Z (cut at the first user message containing "The main intention is to use step")
+
+model                              calls    input   5m write    1h write     cache read      output   list price
+claude-opus-5-5                     113      228          0     349,353     24,797,776     193,436   $11.6240
+claude-sonnet-5-5 (readers)          33       66    217,539           0        467,806      27,667   $0.8674
+
+total at list price: $12.4914  (on a Claude Max plan nothing extra is billed)
