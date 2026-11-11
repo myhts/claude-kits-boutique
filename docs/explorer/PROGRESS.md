@@ -164,5 +164,5 @@ breakpoint for the same reason (a validator warning).
 
 ## Next
 
-- Branch, commit and open a PR for `docs/explorer/` and `docs/claude-kits/` (ask first).
+- Done: PR #3 (`claude-kits-test-2`) adds `docs/explorer/` and `docs/claude-kits/`. Merging it publishes the explorer.
 - The engine notes above as a PR to claude-kits, then link it from the Stage 2 page's last section.
