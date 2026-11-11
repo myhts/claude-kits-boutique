@@ -6,7 +6,9 @@ GitHub enforce it.
 
 **In one line:** claude-kits' first run on a five-language repository. The setup itself went through. Running the
 commands it was about to write down showed that Google's code failed five of its own checks, which their CI never
-ran. Those failures became a 31-line prefactor PR, and nine gaps in the skill became feedback for claude-kits.
+ran. Those failures became a 31-line prefactor PR, and nine gaps in the skill became
+[issues on claude-kits](#feedback-for-claude-kits) (#13–#21). `main` now takes changes
+only through a PR with `verify` and `human-review` green.
 
 ## What it's for
 
@@ -25,7 +27,13 @@ sorry wont the setup-project protect main add verify, human review and other thi
 OK
 ```
 
-Then one choice from a menu: fix the failing code in a separate prefactor PR first.
+Then one choice from a menu: fix the failing code in a separate prefactor PR first. After both PRs were merged:
+
+```text
+/pipeline:setup-project protect
+PK                     (a typo for OK; Claude read it as OK and said so)
+Yes finish Stage 3 with follow up pr and also add 9 feedback items
+```
 
 ## What Claude did
 
@@ -58,6 +66,18 @@ Then one choice from a menu: fix the failing code in a separate prefactor PR fir
    labels                             ready-for-agent, size/large, wayfinder:map|grilling|research|prototype|task
    ```
 
+7. **Protected `main`** once #6 and #8 were merged. It checked that `human-review.yml` was on `main`, that `ci`
+   had passed on the merge commit, and that no ruleset or classic protection existed yet. It showed a dry run and
+   waited for an OK, then created the ruleset
+   [`claude-kits: main`](https://github.com/myhts/claude-kits-boutique/rules/27052870):
+   - a PR for every change, with no approvals (`human-review` is the gate);
+   - the checks `verify` and `human-review`, which must be set by GitHub Actions;
+   - no force pushes, no deletion, no bypass, admins included;
+   - not strict.
+
+   Google's five path-filtered workflows stay out: they're disabled, and a filter would leave a PR waiting forever.
+8. **Filed the feedback** as nine issues on claude-kits (below), and opened this page's last update as a PR. That PR
+   is the first to go through `human-review`.
 ## What it found
 
 The setup asks for "the fast ones once (compile or typecheck, one test file)". Running the *full* checks found what
@@ -109,18 +129,30 @@ runs `go vet -copylocks=false` until issue #7 is done.
 
 - `pr-size` labelled the PR and asked for a split or a reason. The reason went in a reply: no application code, and
   the files only work together.
-- **Not yet shown:** `verify` failing when a job fails, and `human-review`, which can't run until it's on `main`.
-  Stage 4's first PR exercises both.
+- The ruleset, as GitHub applies it to `main` (`gh api repos/myhts/claude-kits-boutique/rules/branches/main`):
+
+  ```text
+  deletion
+  non_fast_forward
+  pull_request
+  required_status_checks: human-review, verify
+  ```
+
+- **Not yet shown:** `verify` failing when a job fails. Stage 4's first red build will show it. `human-review` gets
+  its first real run on this page's follow-up PR.
 
 ## What it cost
 
-From `/pipeline:setup-project` to this page took about 2½ hours of wall time (most of it waiting on answers, toolchain
-downloads and CI) and came to **$3.92 at list price**: 63 calls, all on Opus 5.5, no subagents. Priced with Stage
-2b's [`run-cost.mjs`](evidence/stage-2b/run-cost.mjs).
+The whole stage ran in one session and came to **$6.72 at list price**: 88 calls, all on Opus 5.5, no subagents. Up
+to the setup PR's first green CI took about 2½ hours, most of it waiting on answers, toolchain downloads and CI.
+`protect`, the nine issues and this update came later the same day, after the merges. Priced with Stage 2b's
+[`run-cost.mjs`](evidence/stage-2b/run-cost.mjs).
 
-| Who | Model | Calls | List price |
+| Part | Model | Calls | List price |
 |---|---|---|---|
-| The main session: exploring, every command run, the prefactor, the setup, both PRs, this page | Opus 5.5 | 63 | $3.92 |
+| Exploring, every command run, the prefactor, the setup, PRs #6 and #8, the first version of this page | Opus 5.5 | 63 | $3.92 |
+| `protect`, the nine claude-kits issues, this follow-up | Opus 5.5 | 25 | $2.80 |
+| **Total** | | **88** | **$6.72** |
 
 It ran on a Claude Max plan, so nothing extra was billed.
 
@@ -132,44 +164,48 @@ It ran on a Claude Max plan, so nothing extra was billed.
   OrbStack VM can't reach, and with IPv4 forced, the redirect to GitHub failed. The PR's CI runs it instead.
 - **The merge guard blocked a scoped undo.** To measure the Java formatter's diff, Claude ran it and then
   `git checkout -- .` inside `src/adservice`. The guard read it as "discard all local changes" and stopped the whole
-  command before anything ran. It measured on a copy in the scratchpad instead.
+  command before anything ran. It measured on a copy in the scratchpad instead. It fired twice more while filing the
+  feedback: once on an issue *body* written through a Bash heredoc, which quotes the command, and once on an issue
+  *title*. Nothing ran either time. The bodies were then written with the Write tool, and the title reworded.
 - **`gradlew` isn't executable in git.** Google's Dockerfile `chmod`s it, so the commands say `sh gradlew`.
 
 ## Feedback for claude-kits
 
-Each one is a gap in `pipeline@kits` 0.5.3 that this repository hit, with the fix it suggests. None has been filed
-on `myhts/claude-kits` yet.
+Each one is a gap in `pipeline@kits` 0.5.3 that this repository hit, with the fix it suggests. Each is filed on
+`myhts/claude-kits` with the details: #13–#21.
 
-1. **Polyglot repos don't fit the stack card.** The skill says "more than one stack → ask which one", but when every
+1. [#13](https://github.com/myhts/claude-kits/issues/13) **Polyglot repos don't fit the stack card.** The skill says "more than one stack → ask which one", but when every
    stack maps to `none` the question is moot. The card also has one cell per purpose. *Fix:* when no stack has a
    pack, choose `none` without asking, and give the template a **Services** table (language, services, what pins the
    toolchain) and commands per language.
-2. **"If there is no CI yet" misses CI that exists but can't gate.** Here the CI was disabled, path-filtered and tested
+2. [#14](https://github.com/myhts/claude-kits/issues/14) **"If there is no CI yet" misses CI that exists but can't gate.** Here the CI was disabled, path-filtered and tested
    a subset. *Fix:* step 1 reads the workflows' state (`gh api repos/<r>/actions/workflows`) and asks of each PR
    workflow: does it run, would a filter skip it, and does it cover every service? If not, write `ci.yml`.
-3. **Step 1 doesn't check Actions permissions.** With `allowed_actions: selected`, a template using a third-party
+3. [#15](https://github.com/myhts/claude-kits/issues/15) **Step 1 doesn't check Actions permissions.** With `allowed_actions: selected`, a template using a third-party
    action fails on its first run. *Fix:* add `gh api repos/<r>/actions/permissions` to step 1, and keep the
    templates GitHub-owned.
-4. **Running only the fast commands hides a red baseline.** The full verify failed on code nobody touched. *Fix:*
+4. [#16](https://github.com/myhts/claude-kits/issues/16) **Running only the fast commands hides a red baseline.** The full verify failed on code nobody touched. *Fix:*
    step 3 runs the full verify once too. When existing code fails, offer a prefactor PR before the setup PR, and an
    issue for anything bigger than mechanical.
-5. **`pr-size` counts generated gRPC code.** One `demo.proto` change regenerates code in eleven services. *Fix:* add
+5. [#17](https://github.com/myhts/claude-kits/issues/17) **`pr-size` counts generated gRPC code.** One `demo.proto` change regenerates code in eleven services. *Fix:* add
    `(^|/)genproto/`, `_pb2(_grpc)?\.py$` and `\.pb\.go$` to the template's `SKIP`.
-6. **Ten required checks, kept in sync by hand.** Step 5 makes every PR job required, so matrix jobs become one check
+6. [#18](https://github.com/myhts/claude-kits/issues/18) **Ten required checks, kept in sync by hand.** Step 5 makes every PR job required, so matrix jobs become one check
    each and a new service means a ruleset change. *Fix:* the no-pack `ci.yml` shape ends with a `verify` gate
    (`needs:` all, `if: always()`, fail unless every result is `success`), and step 5 requires just that.
-7. **"Checks not required" is the wrong place for gated checks.** Listing nine checks as "not required" reads as
+7. [#19](https://github.com/myhts/claude-kits/issues/19) **"Checks not required" is the wrong place for gated checks.** Listing nine checks as "not required" reads as
    "these may fail", when the gate requires them. *Fix:* a stack card line **Required through:** `verify`, which step
    5 and `/next` read.
-8. **The merge guard can't tell a scoped undo from a repo-wide one.** `git checkout -- .` run in a subfolder is
-   blocked as "discarding all local changes". *Fix:* resolve the pathspec against the working directory, and block
-   only when it covers the repo root or the change isn't Claude's own.
-9. **An existing, uncommitted `.claude/settings.json`.** The plugin commands reported "already installed" and
+8. [#20](https://github.com/myhts/claude-kits/issues/20) **The merge guard can't tell a scoped undo from a repo-wide
+   one, or a command from text.** `git checkout -- .` run in a subfolder is blocked as "discarding all local
+   changes", and so is the same phrase inside a heredoc or an argument. *Fix:* look at command words only, resolve
+   the pathspec against the working directory, and block only when it covers the repo root or the change isn't
+   Claude's own.
+9. [#21](https://github.com/myhts/claude-kits/issues/21) **An existing, uncommitted `.claude/settings.json`.** The plugin commands reported "already installed" and
    rewrote the file, dropping `"ref": "main"`. Harmless here, but the skill never mentions that the file must be
    committed for collaborators to get the plugins. *Fix:* step 4 lists `.claude/settings.json` among the files to
    commit.
 
 ## Next
 
-Merge [PR #6](https://github.com/myhts/claude-kits-boutique/pull/6), then the setup PR, then run
-`/pipeline:setup-project protect` to require `verify` + `human-review` on `main`.
+Stage 3 is done. Stage 4 starts in a fresh session (`/clear`) with `/grill-with-docs` for the first feature, or
+`/wayfinder` if it's bigger than one session. Every PR from here on needs `/human-review <PR>` before it can merge.
