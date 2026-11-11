@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "pipeline@kits": true
+  },
+  "extraKnownMarketplaces": {
+    "kits": {
+      "source": {
+        "source": "github",
+        "repo": "myhts/claude-kits"
+      }
+    }
+  }
+}
