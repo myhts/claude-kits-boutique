@@ -1,6 +1,6 @@
 // Drives currency, payment and ads over gRPC with the repo's own demo.proto.
 // Runs inside a throwaway container from the currency image (it has @grpc/grpc-js and @grpc/proto-loader).
-// Usage: node drive.js <scenario> ; scenarios listed at the bottom.
+// Usage: node drive.js <scenario> ; scenarios listed at the bottom. With no names: every scenario except shop-*.
 const grpc = require('@grpc/grpc-js');
 const loader = require('@grpc/proto-loader');
 const def = loader.loadSync('/protos/demo.proto', { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true });
@@ -9,6 +9,13 @@ const cred = grpc.credentials.createInsecure();
 const currency = new hs.CurrencyService(process.env.CURRENCY || 'bx-currency:7000', cred);
 const payment = new hs.PaymentService(process.env.PAYMENT || 'bx-payment:50051', cred);
 const ads = new hs.AdService(process.env.ADS || 'bx-ads:9555', cred);
+// The rest of the shop (Stage 2b, `run-services.sh shop`): reached by name on the bx-boutique network.
+const cart = new hs.CartService('bx-cart:7070', cred);
+const catalog = new hs.ProductCatalogService('bx-catalog:3550', cred);
+const shipping = new hs.ShippingService('bx-shipping:50051', cred);
+const checkout = new hs.CheckoutService('bx-checkout:5050', cred);
+const rec = new hs.RecommendationService('bx-rec:8080', cred);
+const email = new hs.EmailService('bx-email:8080', cred);
 
 const call = (client, method, req, deadlineMs = 60000) => new Promise((resolve) => {
   const t0 = process.hrtime.bigint();
@@ -102,11 +109,21 @@ const scenarios = {
   'ads-ctx': () => call(ads, 'getAds', { context_keys: ['clothing'] }),
   'ads-none': () => call(ads, 'getAds', { context_keys: [] }),
   'ads-unknown': () => call(ads, 'getAds', { context_keys: ['no-such-category'] }),
+  // ---- the rest of the shop (Stage 2b, needs `run-services.sh shop`). Catalog, shipping and recommendation log little
+  // or nothing per request, so these send what the frontend and checkout send and show the reply.
+  'shop-catalog-list': async () => { const r = await call(catalog, 'listProducts', {}); return { ms: r.ms, count: r.response.products.length, ids: r.response.products.map((p) => p.id) }; },
+  'shop-catalog-get': () => call(catalog, 'getProduct', { id: '66VCHSJNUP' }),
+  'shop-catalog-missing': () => call(catalog, 'getProduct', { id: 'NOSUCHITEM' }),
+  'shop-rec': () => call(rec, 'listRecommendations', { user_id: 'drive', product_ids: ['66VCHSJNUP'] }),
+  'shop-ship-quote': () => call(shipping, 'getQuote', { address: { street_address: '1600 Amphitheatre Parkway', city: 'Mountain View', state: 'CA', country: 'United States', zip_code: 94043 }, items: [{ product_id: '66VCHSJNUP', quantity: 2 }, { product_id: '6E92ZMYYFZ', quantity: 1 }] }),
+  'shop-ship-quote-empty': () => call(shipping, 'getQuote', { address: { street_address: '1600 Amphitheatre Parkway', city: 'Mountain View', state: 'CA', country: 'United States', zip_code: 94043 }, items: [] }),
+  'shop-ship-order': () => call(shipping, 'shipOrder', { address: { street_address: '1600 Amphitheatre Parkway', city: 'Mountain View', state: 'CA', country: 'United States', zip_code: 94043 }, items: [{ product_id: '66VCHSJNUP', quantity: 2 }] }),
+  'shop-cart-get': () => call(cart, 'getCart', { user_id: process.env.SESSION || 'drive-no-such-user' }),
 };
 
 (async () => {
   const names = process.argv.slice(2);
-  for (const n of (names.length ? names : Object.keys(scenarios))) {
+  for (const n of (names.length ? names : Object.keys(scenarios).filter((k) => !k.startsWith('shop-')))) {
     console.log(JSON.stringify({ scenario: n, ...(await scenarios[n]()) }));
   }
   // Exit explicitly: after a deadline fires, gRPC keeps retrying the connection and would keep the process alive.

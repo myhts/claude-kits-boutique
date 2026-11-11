@@ -152,5 +152,5 @@ by how long it was kept.
 - **The lab tool speaks HTTP; these services speak gRPC.** The gRPC labs went into the explorer's own driver
   (`drive.js`) instead. The lab tool could learn gRPC.
 - **Limits:** the timings ran under emulation (Google's images are built for Intel, this Mac isn't), so they show
-  the shape, not production numbers. Frontend, checkout and cart never ran, so their steps are read from code. The
+  the shape, not production numbers. Frontend, checkout and cart never ran, so their steps are read from code ([Stage 2b](02b-the-whole-shop.md) ran them). The
   VS Code debug configs use the same ports as the proven breakpoints but weren't clicked through by hand.

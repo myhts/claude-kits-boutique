@@ -2,8 +2,13 @@
 
 `/pipeline:project-explorer` on Online Boutique, 2026-11-11. Main session on Opus 5.5; survey readers on Sonnet.
 
-**The brief:** run only currency, payment and ads, from Google's v0.10.7 images with plain Docker and the memory limits
+**The brief (Stage 2):** run only currency, payment and ads, from Google's v0.10.7 images with plain Docker and the memory limits
 from `kubernetes-manifests/` (ads with `DISABLE_STATS=1 DISABLE_TRACING=1`); trace browse, cart and checkout from the code.
+
+**The brief (Stage 2b, same day):** run the whole shop (all 11 services and Redis; the load generator briefly) from the
+same images, each at its manifest memory limit, inside the 4 GB VM. Replace "traced from code" with real data in flows
+4–13, show the Node and Java breakpoints hit from real clicks, try the traced findings for real. No Go, C# or Python
+debuggers (a later "Stage B", if wanted).
 
 ## Phases
 
@@ -14,7 +19,7 @@ from `kubernetes-manifests/` (ads with `DISABLE_STATS=1 DISABLE_TRACING=1`); tra
 - [x] 4 Pathways: TOUR.md (by hand), FLOWS.md (generated)
 - [x] 5 Concepts, gate 3
 - [x] 6 Ladders and labs: 5 concepts, 15 levels; labs for 3; LABS.md (generated); MEASURED.md M1–M8
-- [x] 7 Verified and handed over: `validate-data.mjs` 0 errors (10 warnings, below); `check-explorer.mjs` 257 views
+- [x] 7 Verified and handed over (Stage 2): `validate-data.mjs` 0 errors (10 warnings, below); `check-explorer.mjs` 257 views
   clean in light and dark; everything we started is stopped
 
 **To rebuild after a data change:** validate, `gen-guides.mjs`, bundle, check (commands at the top of
@@ -29,12 +34,15 @@ from `kubernetes-manifests/` (ads with `DISABLE_STATS=1 DISABLE_TRACING=1`); tra
   ports: currency 9229, payment 9230, ads JDWP 5005.
 - **Not ours, leave alone:** a `java` process (127.0.0.1:64996, 65001), `mongod` on 27017, the gcloud config in
   `~/.config/gcloud`. No kube context is set.
-- **Ours:** `bx-currency`, `bx-payment`, `bx-ads`, network `bx-boutique`, and throwaway `--rm` driver containers.
-  `docs/explorer/run-services.sh down` removes them.
+- **Ours:** `bx-currency`, `bx-payment`, `bx-ads`, and since Stage 2b `bx-frontend`, `bx-checkout`, `bx-cart`,
+  `bx-catalog`, `bx-shipping`, `bx-rec`, `bx-email`, `bx-redis` (and `bx-loadgen` while measuring), network
+  `bx-boutique`, and throwaway `--rm` driver containers. `docs/explorer/run-services.sh down` removes them.
+- **Whole shop memory:** 2030 MiB of limits (2542 with the load generator), about 650 MiB used at idle. Only the
+  frontend is published besides the three services: `127.0.0.1:8080`.
 - **Data:** no secrets or data dumps in the repo. Card numbers are public test numbers (4432-8015-6152-0454 is the
   frontend form's default with dashes; 378282246310005 is a public Amex test number).
-- **Files:** everything is under `docs/explorer/`, plus `.vscode/launch.json` (`.vscode/` is gitignored). No tracked
-  file changed; nothing committed. README links not added (ask first).
+- **Files:** everything is under `docs/explorer/`, plus `.vscode/launch.json` (`.vscode/` is gitignored). Google's code,
+  images and manifests are unchanged.
 
 ## Decisions
 
@@ -93,9 +101,22 @@ clicked through in the VS Code UI.
 | AdService.java:130 `hipstershop.AdService` | empty keys, unknown key | |
 | AdService.java:112 `$AdServiceImpl` | 3 calls | |
 
-Not verifiable here (service not run), so these steps have no `bp` and say "traced from code, not run": every
-frontend, checkout, cart, catalog, recommendation, shipping, email and Redis step. The cart concept's levels have no
-breakpoint for the same reason (a validator warning).
+**Stage 2b, from real clicks:** with `run-services.sh shop debug`, the same lines were verified again with the
+trigger being real requests through the frontend (`shop-session.sh order`, `amex`, `ars`) instead of `drive.js`:
+
+| Lines | Hits during the shop sessions |
+|---|---|
+| currency `server.js:131` · `141` · `145` · `158` · `163` | 8 · 38 · 38 · 38 · 38 (`145` read `undefined` for ARS) |
+| currency `server.js:166` | **never**, ARS included |
+| payment `server.js:43` · `45` · `48` | 3 (EUR 49.500221142, USD 27.98 Amex, ARS 0) · 2 · 1 (`400`) |
+| payment `charge.js:70` · `74` · `80` · `85` | 3 · 3 (visa, amex, visa) · 2 · 2 (EUR 49.500221142, ARS 0) |
+| ads `$AdServiceImpl:99` · `101` · `105` · `107` · `112`, `AdService:124` · `130` | 2 · 2 · 1 · 2 · 2, 2 · 1 |
+
+Pausing ads at those breakpoints made the frontend's 100 ms deadline pass: the product page from that run has no ad.
+
+No breakpoints in the Go, C# and Python services: they run from Google's release images, which have no debugger.
+Their steps show real logs, replies and Redis contents instead. Catalog logs nothing per request, so its data comes
+from `drive shop-*` with the same request. The cart concept's levels still have no breakpoint (a validator warning).
 
 ## Bugs and mismatches found (reported, not fixed)
 
@@ -146,8 +167,8 @@ breakpoint for the same reason (a validator warning).
 
 ## Left behind
 
-- The three images, `us-central1-docker.pkg.dev/online-boutique-ci/microservices-demo/{currency,payment,ad}service:v0.10.7`
-  (~950 MB). Remove with `docker rmi` if the space is wanted.
+- The images: since Stage 2b all eleven `us-central1-docker.pkg.dev/online-boutique-ci/microservices-demo/*:v0.10.7`
+  plus `loadgenerator:v0.10.7` and `redis:alpine` (about 1.9 GB). Remove with `docker rmi` if the space is wanted.
 - `.vscode/launch.json` (gitignored).
 - Nothing else: containers and network removed with `run-services.sh down`.
 
@@ -162,7 +183,50 @@ breakpoint for the same reason (a validator warning).
 - Lab configs reworded after a look at the screenshots: the engine already prefixes "No special config:" and shows
   backticks literally.
 
+## Stage 2b: the whole shop (2026-11-11)
+
+- [x] 0 Safety: no other containers, ports 8080 and the rest free, 480 GB disk. 8 more images pulled (7 services,
+  `redis:alpine`), plus the load generator.
+- [x] 1 Gate 1: re-capture flows 4–13 for real (all four groups); load generator briefly; add flows 14 (Change
+  currency) and 15 (Empty cart). (The answer also ticked "keep the 13": read as keep them and add these two.)
+- [x] 2 Debuggers: unchanged; `run-services.sh shop debug`. 20 of the 22 breakpoint lines re-verified from real clicks
+  (all but currency `server.js:119` and `:153`, which only flow 1 uses); `:166` still never stops.
+- [x] 3 Flows 4–13 rewritten with real data; 14 and 15 added (`src/data/flows-more.js`). 15 flows, 78 steps.
+- [x] 4 TOUR.md: section 1b (the whole shop), flows 4–8 by clicking, 9–13 by `shop-session.sh`. FLOWS.md regenerated.
+- [x] 6 Cart concept: lost update now `measured` (M9). MEASURED.md M9–M11.
+- [x] 7 `validate-data.mjs` 0 errors (same 10 warnings); `check-explorer.mjs` 271 views clean; everything stopped.
+
+New tools: `docs/explorer/shop-session.sh` (scenarios `order`, `amex`, `ars`, `no-ads`, `bad-product`, `ship-fails`,
+`race`), `run-services.sh shop [debug]`, `drive shop-*`.
+
+### Found in Stage 2b (reported, not fixed)
+
+9. **The free order, end to end** (finding 1, now fully run): `/setCurrency` ARS → every price `$0.00` (the frontend
+   falls back to `$` for unknown codes, `handlers.go:621`; Chrome's currency picker shows EUR) → order placed, charged
+   `ARS0.0`, shipped, emailed, "Total Paid $0.00". Repro: `shop-session.sh ars`.
+10. **Lost cart updates are the common case, not an edge case:** 17, 18 and 18 carts of 20 lost an item when two adds
+    overlapped; both requests got 302 (M9). Repro: `shop-session.sh race`.
+11. **Shipping down after the charge:** a 20.4 s wait (no deadline on `ShipOrder`), a 500, the cart kept, and the
+    retry charged again: one order, two charges (M11). Repro: `shop-session.sh ship-fails`.
+12. **Cart runs at its memory limit:** 97 MiB at start, 122–127 of 128 MiB once it has served traffic; under the
+    manifest's 10-user load a single `docker exec` inside it got it OOM-killed (M10). Under Rosetta.
+13. **Carts never expire:** every Redis entry has `absexp -1 sldexp -1`, while the session cookie lasts 48 h.
+14. **A made-up product id gives a 500**, not a 404 (catalog says `NotFound`; the frontend renders 500).
+15. **Emptying a cart drops its user id:** the empty cart is written without `user_id`, and items added later are
+    stored without it.
+16. **Recommendations: 5 fetched, 4 shown.** The frontend calls `GetProduct` for all 5 ids, then keeps 4
+    (`rpc.go:114`).
+
+### Corrections in Stage 2b
+
+- Stage 2 called `4432-8015-6152-0454` "the frontend form's default with dashes". The form's default is
+  `4432801561520454` (`cart.html:168`), and the frontend **rejects** the dashed form with 422. Payment, called
+  directly by `drive.js`, accepts both.
+- Stage 2's EUR total (49.500221142, added up by `drive.js` the way checkout does) was right: the real checkout charged
+  exactly that.
+
 ## Next
 
-- Done: PR #3 (`claude-kits-test-2`) adds `docs/explorer/` and `docs/claude-kits/`. Merging it publishes the explorer.
+- Commit `docs/explorer/` and the Stage 2b page on branch `claude-kits-test-2b`, and open a PR (ask first).
 - The engine notes above as a PR to claude-kits, then link it from the Stage 2 page's last section.
+- Stage B, if wanted: Go (Delve), C# and Python debuggers, which need images built from source.
