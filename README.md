@@ -10,22 +10,25 @@ time: every feature run for real, every number measured, every claim checked aga
 > its full history under the [Apache License 2.0](LICENSE). **Not affiliated with Google.** Google's original README
 > follows the line further down.
 
-[![The explorer's map of Online Boutique: 13 boxes, coloured by language and by whether each part was run or traced from code](docs/claude-kits/evidence/stage-2/map.png)](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html)
+[![The explorer's map of Online Boutique: 13 boxes, coloured by language and by whether each has a debugger](docs/claude-kits/evidence/stage-2b/map.png)](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html)
 
 ## One command, and what it found
 
-`/pipeline:project-explorer` read all 11 services, ran three of them in Docker, and turned the shop into a page you
-can click through with a debugger. Nobody asked it to hunt for bugs; it found them anyway:
+`/pipeline:project-explorer` read all 11 services, ran them in Docker, and turned the shop into a page you can click
+through with a debugger. Nobody asked it to hunt for bugs. It found them anyway, then made each one happen:
 
-- **An order can cost nothing.** Pick a currency the shop has no rate for, and every price, and the charge, becomes 0.
+- **An order ships for $0.00.** Pick a currency the shop has no rate for: every price shows `$0.00`, and the order is
+  charged, shipped and confirmed.
+- **Two add-to-carts at once lose an item**, in 17–18 carts out of 20.
+- **One order, two charges**, when shipping fails after the payment and the shopper tries again.
 - **Payment writes the full card number and CVV to its log.**
-- **The same charge sent twice gives two transaction ids**, so a retried order is charged twice.
 
-[All seven findings, how each was checked, and the three times it corrected itself](docs/claude-kits/02-the-architecture.md#what-it-found)
+[Stage 2: the first seven findings](docs/claude-kits/02-the-architecture.md#what-it-found) ·
+[Stage 2b: the whole shop, every bug run](docs/claude-kits/02b-the-whole-shop.md#what-it-found)
 
-| 13 flows · 71 steps | 22 breakpoints | 8 measurements | 59 minutes |
+| 15 flows · 78 steps | 22 breakpoints | 11 measurements | 2 runs |
 |---|---|---|---|
-| a shopper from home page to placed order, and five ways it goes wrong | each one proven to stop during a real request | each with its command and raw output | **$12.49** at list price |
+| a shopper from home page to placed order, and five ways it goes wrong, each made to happen | each one proven to stop on a real request; 20 again from clicks in the real shop | each with its command and raw output | **$20.63** at list price for both ($12.49 + $8.14) |
 
 ## The stages
 
@@ -33,6 +36,7 @@ can click through with a debugger. Nobody asked it to hunt for bugs; it found th
 |---|---|---|---|
 | **1 Who reads the code** | Cheaper Sonnet readers found everything Opus found, at about half the cost | Done | [Page](docs/claude-kits/01-who-reads-the-code.md) · [ADR 0001](docs/claude-kits/adr/0001-explorer-readers-on-sonnet.md) |
 | **2 The architecture** | `/project-explorer`: the map, flows run for real or traced from code, concept ladders and labs | Done | [Page](docs/claude-kits/02-the-architecture.md) · [Live explorer](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html) |
+| **2b The whole shop** | All 11 services run; every traced bug made to happen through the real shop | Done | [Page](docs/claude-kits/02b-the-whole-shop.md) |
 | 3 Set up the flow | `/setup-project` on a five-language repository | Next | |
 | 4 Features, end to end | plan, spec, tickets, test-first build, reviewers, human review | To come | |
 | 5 The reviewers | the reviewers on real code with planted defects | To come | |

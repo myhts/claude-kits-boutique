@@ -149,3 +149,92 @@ throwaway container on the same Docker network.
   ```
 - **Result:** a currency with no rate converts to 0 with status OK, and payment charges 0. The same Charge request
   twice gives two different transaction ids: nothing makes a retry safe.
+
+## M9. Cart: two add-to-carts at once, through the real shop (Lost cart updates L0, flow 13)
+
+- **When / where:** 2026-11-11, the whole shop (`docs/explorer/run-services.sh shop`), every container at its
+  manifest memory limit, no CPU limits, under Rosetta. Requests from this Mac to 127.0.0.1:8080, through the frontend.
+- **What:** per trial, a new shopper loads the home page, adds a Tank Top, then sends two `POST /cart` at the same
+  moment (a Mug and a Watch), and the cart's Redis entry is read back. 20 trials per run, three runs.
+- **Command:** `docs/explorer/shop-session.sh race <out-dir> 20`
+- **Raw output:**
+  ```
+  run 1: race: 17 of 20 carts lost an item     (replies not recorded in this run)
+  run 2: race: 18 of 20 carts lost an item
+  run 3: race: 18 of 20 carts lost an item
+  run 2, trial 1: 2 of 3 items in the cart · replies 302 302   "\n$<session>\x12\x0e\n\n66VCHSJNUP\x10\x01\x12\x0e\n\n6E92ZMYYFZ\x10\x01"
+  run 2, trial 2: 2 of 3 items in the cart · replies 302 302   "\n$<session>\x12\x0e\n\n66VCHSJNUP\x10\x01\x12\x0e\n\n1YMWWN1N4O\x10\x01"
+  runs 2 and 3: 40 of 40 trials answered 302 302
+  ```
+  What cart sends to Redis for one add (`docker exec bx-redis redis-cli MONITOR`, two adds in a row):
+  ```
+  1794380032.820079 "HMGET" "<session>" "absexp" "sldexp" "data"
+  1794380032.822607 "HMSET" "<session>" "absexp" "-1" "sldexp" "-1" "data" "\n$<session>\x12\x0e\n\n66VCHSJNUP\x10\x01"
+  1794380032.849649 "HMGET" "<session>" "absexp" "sldexp" "data"
+  1794380032.851161 "HMSET" "<session>" "absexp" "-1" "sldexp" "-1" "data" "…66VCHSJNUP\x10\x01\x12\x0e\n\n6E92ZMYYFZ\x10\x01"
+  ```
+- **Result:** **17, 18 and 18 carts of 20** lost one of the two items, and the shopper got a 302 both times. The read
+  and the write are separate commands about 2.5 ms apart, with nothing to stop the other request writing in between.
+  `absexp` and `sldexp` are -1: carts never expire.
+
+## M10. The whole shop under the load generator, and cart's memory
+
+- **When / where:** as M9. The load generator is Google's `loadgenerator:v0.10.7` with the manifest's settings:
+  `USERS=10 RATE=1`, `--memory 512m`, aimed at `bx-frontend:8080`.
+- **Commands:**
+  ```bash
+  docker run -d --name bx-loadgen --network bx-boutique --platform linux/amd64 --memory 512m --memory-swap 512m \
+    -e FRONTEND_ADDR=bx-frontend:8080 -e USERS=10 -e RATE=1 \
+    us-central1-docker.pkg.dev/online-boutique-ci/microservices-demo/loadgenerator:v0.10.7
+  docker stats --no-stream            # during, and every 9 s for cart in run 2
+  docker logs --since 3m bx-frontend  # "request complete" lines: status and took_ms per request
+  docker rm -f bx-loadgen
+  ```
+- **Raw output, run 1 (3 minutes):**
+  ```
+  locust:   Aggregated  408 reqs  0 fails  avg 27 ms  max 100 ms
+  frontend: 220 GET /product/* 200 · 98 GET /cart 200 · 50 GET / 200 · 42 POST /cart 302 · 33 POST /setCurrency 302
+            12 POST /cart/checkout 200 · 0 lines with severity "error"
+  took_ms:  /          n 50   p50 26  p95 61  max 86
+            /product/* n 220  p50 23  p95 42  max 64
+            /cart      n 140  p50 13  p95 35  max 79
+            /cart/checkout n 12  p50 33  p95 51  max 51
+  docker stats during: bx-cart 127.1MiB / 128MiB · bx-ads 204.8MiB / 300MiB · bx-currency 82.63MiB / 128MiB
+                       every other service under 60 MiB · bx-loadgen 64.53MiB / 512MiB
+  ```
+- **Then:** `docker exec bx-cart cat /sys/fs/cgroup/memory.events` (to read cart's memory events) failed with
+  `signal: killed (possibly OOM-killed)`, and cart exited: `exit=137 oomkilled=true`. The `cat` process joined cart's
+  memory group while cart was at 127.1 of 128 MiB; the kernel killed cart's main process.
+- **Raw output, run 2 (5 minutes, cart restarted, nothing run inside it):** cart's memory every 9 s
+  ```
+  06:45:16 100.7MiB   06:45:26 116.3MiB   06:45:37 118.8MiB   …   06:48:18 125.7MiB (highest)   …   06:50:10 123.8MiB
+  30 samples: 100.7 to 125.7 MiB · status running, oom=false throughout
+  frontend: 0 "failed to retrieve ads" during the run
+  ```
+- **Result:** the shop handled the manifest's own load with **0 failures** and sub-100 ms pages, but **cart lives at
+  96–98% of its 128 MiB limit** once it has served traffic (97 MiB right after a start). It didn't die on its own in
+  5 minutes; one extra process inside the container (a `docker exec` here, a `kubectl exec` on a cluster) was enough to
+  get it OOM-killed. Under Rosetta: .NET's memory use on native amd64 may differ. Not tested on a cluster.
+
+## M11. Shipping down after the charge (flow 12)
+
+- **What:** `docs/explorer/shop-session.sh ship-fails`: payment frozen with `docker pause`, the order sent, and once
+  shipping has logged `[GetQuote] completed request`, `docker stop -t 1 bx-shipping` and `docker unpause bx-payment`.
+  Then shipping restarted and the order placed again.
+- **Raw output:**
+  ```
+  home               status=200 time=0.096811s
+  add-tank           status=302 time=0.027580s
+  checkout-ship-down status=500 time=20.445043s
+  view-cart          status=200 time=0.048498s
+  checkout-retry     status=200 time=0.039097s
+  payment: Transaction processed: visa ending 0454  Amount: USD27.980000000   (twice)
+  checkout: payment went through (transaction_id: 62ce704f-3c17-4c48-8774-c875db8c7d87)
+            payment went through (transaction_id: a342d4cf-2b6b-4fdc-a6e9-6b816dfb9ee1)
+  frontend: … shipping error: shipment failed: rpc error: code = Unavailable desc = connection error: desc =
+            "transport: Error while dialing: dial tcp 192.168.97.7:50051: i/o timeout"   took_ms 20441
+  ```
+- **Result:** one order, **two charges**; the first left the shopper charged with no order and a 500, after a
+  20.4 s wait (no deadline on the call to shipping, so it waited for the connection attempt to time out). A stopped
+  container's address stops answering instead of refusing; on Kubernetes a Service with no ready pods may fail
+  faster. Once.

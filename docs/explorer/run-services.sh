@@ -7,7 +7,13 @@
 #   docs/explorer/run-services.sh drive [scenario…]   # send real gRPC requests (docs/explorer/drive.js)
 #   docs/explorer/run-services.sh restart currency|payment|ads   # one service, cold, no debugger (labs)
 #                                 CPUS=0.2 … restart currency      # … with a CPU limit (manifest: limits.cpu 200m)
+#   docs/explorer/run-services.sh shop    # the whole shop (Stage 2b): the three above + the other 7 services and
+#                                           Redis, every one at its manifest memory limit; browse http://localhost:8080
+#   docs/explorer/run-services.sh shop debug   # the same, with currency, payment and ads on their debugger ports
 #   docs/explorer/run-services.sh down    # stop and remove only what this script started
+#
+# Only the frontend is published (127.0.0.1:8080), besides the three services' ports. The others are reached on the
+# bx-boutique network by name (drive.js does that). Env vars are the manifests', with the addresses renamed to bx-*.
 #
 # Debug ports (127.0.0.1): currency Node inspector 9229 · payment Node inspector 9230 · ads JDWP 5005.
 # The debugger is switched on by overriding the container's command/env at run time; the images are unchanged.
@@ -42,11 +48,37 @@ up() {
   docker ps --filter name=bx- --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
 }
 
+# name, memory, image, then -e pairs: the Deployment's env from kubernetes-manifests/, addresses pointed at bx-* names
+run_one() {
+  local name=$1 mem=$2 image=$3; shift 3
+  docker run -d --name "$name" --network $NET --memory "$mem" --memory-swap "$mem" "$@" "$image" >/dev/null
+}
+
+shop() {
+  up "${1:-}" >/dev/null
+  run_one bx-redis 256m redis:alpine
+  run_one bx-catalog 128m $REG/productcatalogservice:$TAG -e PORT=3550 -e DISABLE_PROFILER=1
+  run_one bx-shipping 128m $REG/shippingservice:$TAG -e PORT=50051 -e DISABLE_PROFILER=1
+  run_one bx-cart 128m $REG/cartservice:$TAG -e REDIS_ADDR=bx-redis:6379
+  run_one bx-email 128m $REG/emailservice:$TAG -e PORT=8080 -e DISABLE_PROFILER=1
+  run_one bx-rec 450m $REG/recommendationservice:$TAG -e PORT=8080 -e PRODUCT_CATALOG_SERVICE_ADDR=bx-catalog:3550 \
+    -e DISABLE_PROFILER=1
+  run_one bx-checkout 128m $REG/checkoutservice:$TAG -e PORT=5050 -e PRODUCT_CATALOG_SERVICE_ADDR=bx-catalog:3550 \
+    -e SHIPPING_SERVICE_ADDR=bx-shipping:50051 -e PAYMENT_SERVICE_ADDR=bx-payment:50051 \
+    -e EMAIL_SERVICE_ADDR=bx-email:8080 -e CURRENCY_SERVICE_ADDR=bx-currency:7000 -e CART_SERVICE_ADDR=bx-cart:7070
+  run_one bx-frontend 128m $REG/frontend:$TAG -p 127.0.0.1:8080:8080 -e PORT=8080 \
+    -e PRODUCT_CATALOG_SERVICE_ADDR=bx-catalog:3550 -e CURRENCY_SERVICE_ADDR=bx-currency:7000 \
+    -e CART_SERVICE_ADDR=bx-cart:7070 -e RECOMMENDATION_SERVICE_ADDR=bx-rec:8080 \
+    -e SHIPPING_SERVICE_ADDR=bx-shipping:50051 -e CHECKOUT_SERVICE_ADDR=bx-checkout:5050 \
+    -e AD_SERVICE_ADDR=bx-ads:9555 -e SHOPPING_ASSISTANT_SERVICE_ADDR=shoppingassistantservice:80 -e ENABLE_PROFILER=0
+  docker ps --filter name=bx- --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+}
+
 drive() {
   # A throwaway container from the currency image (it already has @grpc/grpc-js and @grpc/proto-loader).
   docker run --rm --network $NET --memory 128m --memory-swap 128m \
     -v "$ROOT/protos:/protos:ro" -v "$ROOT/docs/explorer/drive.js:/drive/drive.js:ro" \
-    -e CONC="${CONC:-4}" -e DUR="${DUR:-10}" -e NODE_PATH=/usr/src/app/node_modules --entrypoint node $REG/currencyservice:$TAG /drive/drive.js "$@"
+    -e CONC="${CONC:-4}" -e DUR="${DUR:-10}" -e SESSION="${SESSION:-}" -e NODE_PATH=/usr/src/app/node_modules --entrypoint node $REG/currencyservice:$TAG /drive/drive.js "$@"
 }
 
 restart() {
@@ -71,15 +103,17 @@ restart() {
 }
 
 down() {
-  docker rm -f bx-currency bx-payment bx-ads >/dev/null 2>&1 || true
+  docker rm -f bx-frontend bx-checkout bx-rec bx-email bx-cart bx-shipping bx-catalog bx-redis \
+    bx-currency bx-payment bx-ads >/dev/null 2>&1 || true
   docker network rm $NET >/dev/null 2>&1 || true
 }
 
 case "${1:-}" in
   up) up ;;
   debug) up debug ;;
+  shop) shift; shop "${1:-}" ;;
   drive) shift; drive "$@" ;;
   restart) shift; restart "$@" ;;
   down) down ;;
-  *) echo "usage: $0 up|debug|drive [scenario…]|restart currency|payment|ads|down"; exit 1 ;;
+  *) echo "usage: $0 up|debug|shop [debug]|drive [scenario…]|restart currency|payment|ads|down"; exit 1 ;;
 esac
