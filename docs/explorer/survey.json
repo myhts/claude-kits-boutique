@@ -1,0 +1,182 @@
+{
+  "about": "Merged from nine reader fact sheets (Sonnet, one per service; shipping+email and recommendation+loadgenerator+shoppingassistant shared a reader), 2026-11-11, at commit 9cdce82c. Checked by the main session: all 15 rpcs in protos/demo.proto appear as entry points; all 12 *_ADDR values in kubernetes-manifests/ appear as calls or stores; 28 cited lines spot-checked, 1 off by one and corrected (product_catalog.go:56 -> 57).",
+  "services": [
+    {
+      "name": "frontend", "language": "Go", "run": "traced from code",
+      "entryPoints": [
+        { "name": "GET /", "ref": "src/frontend/main.go:150" },
+        { "name": "GET /product/{id}", "ref": "src/frontend/main.go:151" },
+        { "name": "GET /cart", "ref": "src/frontend/main.go:152" },
+        { "name": "POST /cart", "ref": "src/frontend/main.go:153" },
+        { "name": "POST /cart/empty", "ref": "src/frontend/main.go:154" },
+        { "name": "POST /setCurrency", "ref": "src/frontend/main.go:155" },
+        { "name": "GET /logout", "ref": "src/frontend/main.go:156" },
+        { "name": "POST /cart/checkout", "ref": "src/frontend/main.go:157" },
+        { "name": "GET /assistant", "ref": "src/frontend/main.go:158" },
+        { "name": "GET /static/*", "ref": "src/frontend/main.go:159" },
+        { "name": "ANY /robots.txt", "ref": "src/frontend/main.go:160" },
+        { "name": "ANY /_healthz", "ref": "src/frontend/main.go:161" },
+        { "name": "GET /product-meta/{ids}", "ref": "src/frontend/main.go:162" },
+        { "name": "POST /bot", "ref": "src/frontend/main.go:163" }
+      ],
+      "calls": [
+        { "to": "currencyservice", "how": "gRPC", "what": "GetSupportedCurrencies", "ref": "src/frontend/rpc.go:32" },
+        { "to": "currencyservice", "how": "gRPC", "what": "Convert", "ref": "src/frontend/rpc.go:81" },
+        { "to": "productcatalogservice", "how": "gRPC", "what": "ListProducts", "ref": "src/frontend/rpc.go:47" },
+        { "to": "productcatalogservice", "how": "gRPC", "what": "GetProduct", "ref": "src/frontend/rpc.go:53" },
+        { "to": "cartservice", "how": "gRPC", "what": "GetCart", "ref": "src/frontend/rpc.go:58" },
+        { "to": "cartservice", "how": "gRPC", "what": "EmptyCart", "ref": "src/frontend/rpc.go:63" },
+        { "to": "cartservice", "how": "gRPC", "what": "AddItem", "ref": "src/frontend/rpc.go:68" },
+        { "to": "shippingservice", "how": "gRPC", "what": "GetQuote", "ref": "src/frontend/rpc.go:88" },
+        { "to": "recommendationservice", "how": "gRPC", "what": "ListRecommendations", "ref": "src/frontend/rpc.go:100" },
+        { "to": "adservice", "how": "gRPC", "what": "GetAds, 100 ms timeout (rpc.go:120)", "ref": "src/frontend/rpc.go:123" },
+        { "to": "checkoutservice", "how": "gRPC", "what": "PlaceOrder", "ref": "src/frontend/handlers.go:354" },
+        { "to": "shoppingassistantservice", "how": "HTTP", "what": "POST, proxies /bot", "ref": "src/frontend/handlers.go:472" },
+        { "to": "packaging service (only if PACKAGING_SERVICE_URL set)", "how": "HTTP", "ref": "src/frontend/packaging_info.go:54" },
+        { "to": "OTLP collector (only if ENABLE_TRACING=1)", "how": "gRPC", "ref": "src/frontend/main.go:179" },
+        { "to": "GCP metadata server", "how": "HTTP", "ref": "src/frontend/deployment_details.go:45" }
+      ],
+      "stores": [
+        { "name": "cookie shop_session-id: the user id, also the cart key", "ref": "src/frontend/middleware.go:97" },
+        { "name": "cookie shop_currency", "ref": "src/frontend/handlers.go:511" }
+      ],
+      "unsure": ["deployed names of the gRPC targets come from *_ADDR env vars (main.go:135-142); checked against kubernetes-manifests/ by the main session"]
+    },
+    {
+      "name": "checkoutservice", "language": "Go", "run": "traced from code",
+      "entryPoints": [{ "name": "CheckoutService.PlaceOrder", "ref": "src/checkoutservice/main.go:230" }, { "name": "grpc.health.v1.Health.Check", "ref": "src/checkoutservice/main.go:222" }],
+      "calls": [
+        { "to": "cartservice", "how": "gRPC", "what": "GetCart", "ref": "src/checkoutservice/main.go:325" },
+        { "to": "cartservice", "how": "gRPC", "what": "EmptyCart", "ref": "src/checkoutservice/main.go:333" },
+        { "to": "productcatalogservice", "how": "gRPC", "what": "GetProduct, once per item", "ref": "src/checkoutservice/main.go:344" },
+        { "to": "currencyservice", "how": "gRPC", "what": "Convert, per item and for shipping; context.TODO(), so no deadline or trace context", "ref": "src/checkoutservice/main.go:360" },
+        { "to": "shippingservice", "how": "gRPC", "what": "GetQuote", "ref": "src/checkoutservice/main.go:314" },
+        { "to": "shippingservice", "how": "gRPC", "what": "ShipOrder", "ref": "src/checkoutservice/main.go:387" },
+        { "to": "paymentservice", "how": "gRPC", "what": "Charge", "ref": "src/checkoutservice/main.go:370" },
+        { "to": "emailservice", "how": "gRPC", "what": "SendOrderConfirmation", "ref": "src/checkoutservice/main.go:380" }
+      ],
+      "stores": [],
+      "unsure": ["the order id is generated in memory and never stored; no idempotency check"]
+    },
+    {
+      "name": "cartservice", "language": "C#", "run": "traced from code",
+      "entryPoints": [
+        { "name": "CartService.AddItem", "ref": "src/cartservice/src/services/CartService.cs:34" },
+        { "name": "CartService.GetCart", "ref": "src/cartservice/src/services/CartService.cs:40" },
+        { "name": "CartService.EmptyCart", "ref": "src/cartservice/src/services/CartService.cs:45" },
+        { "name": "grpc.health.v1.Health.Check (Ping always true)", "ref": "src/cartservice/src/services/HealthCheckService.cs:33" }
+      ],
+      "calls": [],
+      "stores": [
+        { "name": "Redis (redis-cart) when REDIS_ADDR is set; key = userId, value = the whole Cart protobuf", "ref": "src/cartservice/src/Startup.cs:34" },
+        { "name": "Redis GET (read-modify-write, no lock)", "ref": "src/cartservice/src/cartstore/RedisCartStore.cs:40" },
+        { "name": "Redis SET whole cart", "ref": "src/cartservice/src/cartstore/RedisCartStore.cs:60" },
+        { "name": "Spanner (SPANNER_PROJECT / SPANNER_CONNECTION_STRING)", "ref": "src/cartservice/src/Startup.cs:42" },
+        { "name": "AlloyDB (ALLOYDB_PRIMARY_IP)", "ref": "src/cartservice/src/Startup.cs:46" },
+        { "name": "in-memory fallback", "ref": "src/cartservice/src/Startup.cs:51" }
+      ],
+      "unsure": ["the Redis hash layout used by the IDistributedCache library is library behaviour, not in this repo"]
+    },
+    {
+      "name": "productcatalogservice", "language": "Go", "run": "traced from code",
+      "entryPoints": [
+        { "name": "ProductCatalogService.ListProducts", "ref": "src/productcatalogservice/product_catalog.go:41" },
+        { "name": "ProductCatalogService.GetProduct", "ref": "src/productcatalogservice/product_catalog.go:47" },
+        { "name": "ProductCatalogService.SearchProducts", "ref": "src/productcatalogservice/product_catalog.go:60" },
+        { "name": "grpc.health.v1.Health.Check", "ref": "src/productcatalogservice/product_catalog.go:33" }
+      ],
+      "calls": [{ "to": "AlloyDB (only if ALLOYDB_CLUSTER_NAME set)", "how": "pgx", "ref": "src/productcatalogservice/catalog_loader.go:101" }],
+      "stores": [{ "name": "products.json, loaded at startup", "ref": "src/productcatalogservice/catalog_loader.go:47" }],
+      "notes": [
+        { "note": "GetProduct returns NotFound for an unknown id", "ref": "src/productcatalogservice/product_catalog.go:57" },
+        { "note": "EXTRA_LATENCY adds a sleep to every RPC", "ref": "src/productcatalogservice/server.go:88" },
+        { "note": "SIGUSR1 makes every request reload the catalog", "ref": "src/productcatalogservice/server.go:100" }
+      ],
+      "unsure": []
+    },
+    {
+      "name": "currencyservice", "language": "Node.js", "run": "run for real (v0.10.7 image)",
+      "entryPoints": [
+        { "name": "CurrencyService.GetSupportedCurrencies", "ref": "src/currencyservice/server.js:128" },
+        { "name": "CurrencyService.Convert", "ref": "src/currencyservice/server.js:138" },
+        { "name": "grpc.health.v1.Health.Check", "ref": "src/currencyservice/server.js:174" }
+      ],
+      "calls": [
+        { "to": "Google Cloud Profiler (unless DISABLE_PROFILER)", "how": "library", "ref": "src/currencyservice/server.js:33" },
+        { "to": "OTLP collector (only if ENABLE_TRACING=1)", "how": "gRPC", "ref": "src/currencyservice/server.js:62" }
+      ],
+      "stores": [{ "name": "data/currency_conversion.json, EUR-based rates, 33 currencies", "ref": "src/currencyservice/server.js:110" }],
+      "unsure": []
+    },
+    {
+      "name": "paymentservice", "language": "Node.js", "run": "run for real (v0.10.7 image)",
+      "entryPoints": [{ "name": "PaymentService.Charge", "ref": "src/paymentservice/server.js:41" }, { "name": "grpc.health.v1.Health.Check", "ref": "src/paymentservice/server.js:52" }],
+      "calls": [
+        { "to": "Google Cloud Profiler (unless DISABLE_PROFILER)", "how": "library", "ref": "src/paymentservice/index.js:25" },
+        { "to": "OTLP collector (only if ENABLE_TRACING=1)", "how": "gRPC", "ref": "src/paymentservice/index.js:48" }
+      ],
+      "stores": [],
+      "notes": [{ "note": "no real charge: returns a random uuid", "ref": "src/paymentservice/charge.js:85" }],
+      "unsure": []
+    },
+    {
+      "name": "adservice", "language": "Java", "run": "run for real (v0.10.7 image, DISABLE_STATS=1 DISABLE_TRACING=1)",
+      "entryPoints": [{ "name": "AdService.GetAds", "ref": "src/adservice/src/main/java/hipstershop/AdService.java:94" }, { "name": "grpc.health.v1.Health (HealthStatusManager)", "ref": "src/adservice/src/main/java/hipstershop/AdService.java:60" }],
+      "calls": [{ "to": "none: stats and tracing only log; their exporters are TODOs", "ref": "src/adservice/src/main/java/hipstershop/AdService.java:196" }],
+      "stores": [{ "name": "in-memory ads map, 7 ads in 6 categories", "ref": "src/adservice/src/main/java/hipstershop/AdService.java:121" }],
+      "unsure": []
+    },
+    {
+      "name": "shippingservice", "language": "Go", "run": "traced from code",
+      "entryPoints": [{ "name": "ShippingService.GetQuote", "ref": "src/shippingservice/main.go:119" }, { "name": "ShippingService.ShipOrder", "ref": "src/shippingservice/main.go:142" }],
+      "calls": [{ "to": "Google Cloud Profiler (unless DISABLE_PROFILER)", "how": "library", "ref": "src/shippingservice/main.go:167" }],
+      "stores": [],
+      "notes": [
+        { "note": "flat 8.99 USD for any non-empty cart", "ref": "src/shippingservice/quote.go:38" },
+        { "note": "tracking id is random; only the address length goes into it", "ref": "src/shippingservice/main.go:147" }
+      ],
+      "unsure": []
+    },
+    {
+      "name": "emailservice", "language": "Python", "run": "traced from code",
+      "entryPoints": [{ "name": "EmailService.SendOrderConfirmation (DummyEmailService)", "ref": "src/emailservice/email_server.py:109" }],
+      "calls": [{ "to": "none in dummy mode, the only mode started", "ref": "src/emailservice/email_server.py:200" }],
+      "stores": [],
+      "notes": [{ "note": "logs one line, sends nothing", "ref": "src/emailservice/email_server.py:110" }],
+      "unsure": []
+    },
+    {
+      "name": "recommendationservice", "language": "Python", "run": "traced from code",
+      "entryPoints": [{ "name": "RecommendationService.ListRecommendations", "ref": "src/recommendationservice/recommendation_server.py:70" }],
+      "calls": [{ "to": "productcatalogservice", "how": "gRPC", "what": "ListProducts", "ref": "src/recommendationservice/recommendation_server.py:73" }],
+      "stores": [],
+      "notes": [{ "note": "random sample of up to 5 products not already shown", "ref": "src/recommendationservice/recommendation_server.py:77" }],
+      "unsure": []
+    },
+    {
+      "name": "loadgenerator", "language": "Python (Locust)", "run": "traced from code",
+      "entryPoints": [
+        { "name": "task index GET / (weight 1)", "ref": "src/loadgenerator/locustfile.py:83" },
+        { "name": "task setCurrency (2)", "ref": "src/loadgenerator/locustfile.py:84" },
+        { "name": "task browseProduct (10)", "ref": "src/loadgenerator/locustfile.py:85" },
+        { "name": "task addToCart (2)", "ref": "src/loadgenerator/locustfile.py:86" },
+        { "name": "task viewCart (3)", "ref": "src/loadgenerator/locustfile.py:87" },
+        { "name": "task checkout (1)", "ref": "src/loadgenerator/locustfile.py:88" }
+      ],
+      "calls": [{ "to": "frontend", "how": "HTTP", "ref": "src/loadgenerator/Dockerfile:52" }],
+      "stores": [],
+      "unsure": []
+    },
+    {
+      "name": "shoppingassistantservice", "language": "Python (Flask, LangChain)", "run": "not on the map: no manifest in kubernetes-manifests/",
+      "entryPoints": [{ "name": "POST /", "ref": "src/shoppingassistantservice/shoppingassistantservice.py:65" }],
+      "calls": [
+        { "to": "Gemini", "how": "LangChain SDK", "ref": "src/shoppingassistantservice/shoppingassistantservice.py:82" },
+        { "to": "AlloyDB vector store", "how": "SDK", "ref": "src/shoppingassistantservice/shoppingassistantservice.py:91" },
+        { "to": "Google Secret Manager", "how": "SDK", "ref": "src/shoppingassistantservice/shoppingassistantservice.py:38" }
+      ],
+      "stores": [],
+      "unsure": []
+    }
+  ]
+}
