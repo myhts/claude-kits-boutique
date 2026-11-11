@@ -1,8 +1,66 @@
-> **This is a copy of Google's [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo)**, kept
-> with its full history under the [Apache License 2.0](LICENSE). It's used to prove
-> [claude-kits](https://github.com/myhts/claude-kits) on a real eleven-service app: every feature applied, explained
-> and measured. **Not affiliated with Google.** Changes from the original are made through pull requests here and
-> listed in `docs/claude-kits/` as they land. Everything below this box is Google's original README.
+# claude-kits, proven on a real app
+
+**[claude-kits](https://github.com/myhts/claude-kits) applied to an 11-service, 5-language shop, one stage at a
+time: every feature run for real, every number measured, every claim checked against the code.**
+
+**[Open the live explorer](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html)** ·
+[Read the stage-by-stage record](docs/claude-kits/README.md) · [Get claude-kits](https://github.com/myhts/claude-kits)
+
+> This is a copy of Google's [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo), kept with
+> its full history under the [Apache License 2.0](LICENSE). **Not affiliated with Google.** Google's original README
+> follows the line further down.
+
+[![The explorer's map of Online Boutique: 13 boxes, coloured by language and by whether each part was run or traced from code](docs/claude-kits/evidence/stage-2/map.png)](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html)
+
+## One command, and what it found
+
+`/pipeline:project-explorer` read all 11 services, ran three of them in Docker, and turned the shop into a page you
+can click through with a debugger. Nobody asked it to hunt for bugs; it found them anyway:
+
+- **An order can cost nothing.** Pick a currency the shop has no rate for, and every price, and the charge, becomes 0.
+- **Payment writes the full card number and CVV to its log.**
+- **The same charge sent twice gives two transaction ids**, so a retried order is charged twice.
+
+[All seven findings, how each was checked, and the three times it corrected itself](docs/claude-kits/02-the-architecture.md#what-it-found)
+
+| 13 flows · 71 steps | 22 breakpoints | 8 measurements | 59 minutes |
+|---|---|---|---|
+| a shopper from home page to placed order, and five ways it goes wrong | each one proven to stop during a real request | each with its command and raw output | **$12.49** at list price |
+
+## The stages
+
+| Stage | What it proves | Status | Read it |
+|---|---|---|---|
+| **1 Who reads the code** | Cheaper Sonnet readers found everything Opus found, at about half the cost | Done | [Page](docs/claude-kits/01-who-reads-the-code.md) · [ADR 0001](docs/claude-kits/adr/0001-explorer-readers-on-sonnet.md) |
+| **2 The architecture** | `/project-explorer`: the map, flows run for real or traced from code, concept ladders and labs | Done | [Page](docs/claude-kits/02-the-architecture.md) · [Live explorer](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html) |
+| 3 Set up the flow | `/setup-project` on a five-language repository | Next | |
+| 4 Features, end to end | plan, spec, tickets, test-first build, reviewers, human review | To come | |
+| 5 The reviewers | the reviewers on real code with planted defects | To come | |
+| 6 Ship it | images per changed service, `/deploy`, rollout and undo | To come | |
+| 7 Retro | what worked, what didn't, what it cost | To come | |
+
+Every stage page has the same shape: what the feature is for, what we typed, what Claude did, what we decided, the
+evidence, what it cost, and what didn't work.
+
+## Try it yourself
+
+| | |
+|---|---|
+| **Just look** | [The live explorer](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html). Start with flow 1, then flow 10: the free order |
+| **Follow a request in a debugger** | [The first-hour tour](docs/explorer/TOUR.md): start three services with `docs/explorer/run-services.sh debug`, attach VS Code, watch a request stop at each step |
+| **Break it** | [The labs](docs/explorer/LABS.md): freeze a service, cap its CPU, flood it, and watch the numbers from the concept pages happen on your laptop |
+
+## What's here
+
+```text
+docs/claude-kits/   the record: one page per stage, decisions (ADRs), evidence, costs
+docs/explorer/      the explorer: the page, its data, guides, measurements, and the scripts that run the services
+everything else     Google's Online Boutique, changed only through pull requests listed in docs/claude-kits/
+```
+
+---
+
+*Google's original README, unchanged:*
 
 <!-- <p align="center">
 <img src="/src/frontend/static/icons/Hipster_HeroLogoMaroon.svg" width="300" alt="Online Boutique" />
