@@ -1,0 +1,74 @@
+# .github/workflows/pr-size.yml: flags pull requests over the size budget. A small PR gets a real review; a big one
+# gets skimmed. Over budget it adds the label size/large and one comment asking for a split or a reason; back under
+# budget it removes both. It never fails the build: some big PRs are right (a mechanical rename, a generated
+# client), and a reason in the PR is enough.
+# Counted: added + deleted lines over the PR's files, minus lockfiles, snapshots and generated code (SKIP below;
+# here that includes the protobuf code generated from protos/demo.proto: Go genproto/ and Python *_pb2*.py).
+# Budget: the repository variable PR_BUDGET if you set one (Settings → Secrets and variables → Actions →
+# Variables), otherwise 400.
+# Pull requests from forks get a read-only token, so for them the step can only warn. pull_request_target would let
+# it label them; that's safe only while this workflow never checks out the PR's code.
+name: pr-size
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write           # read the PR's files, label it and comment on it; nothing else
+
+concurrency:                     # a newer push replaces a run that's still counting
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PR_BUDGET: ${{ vars.PR_BUDGET || 400 }}
+
+jobs:
+  size:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      LABEL: size/large
+      MARKER: '<!-- pr-size -->'
+      # Not counted (a regular expression on the file path): nobody reviews these line by line.
+      SKIP: '(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb)$|\.lock$|(^|/)__snapshots__/|\.snap$|(^|/)generated/|(^|/)drizzle/meta/|(^|/)genproto/|_pb2(_grpc)?\.py$'
+    steps:
+      - name: Count the changed lines, then label and comment
+        continue-on-error: true  # a GitHub API hiccup or a fork's read-only token must not turn the PR red
+        run: |
+          # --paginate prints one JSON array per page of 100 files; jq -s joins them.
+          total=$(gh api --paginate "repos/$GH_REPO/pulls/$PR/files" \
+            | jq -s '[add[] | select(.filename | test(env.SKIP) | not) | .additions + .deletions] | add // 0')
+          budget=$PR_BUDGET
+          [[ "$budget" =~ ^[0-9]+$ ]] || { echo "::warning::PR_BUDGET '$budget' isn't a number: using 400"; budget=400; }
+          echo "$total changed lines counted, budget $budget" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # Our earlier comment, if any: found by its marker, and only if this workflow (github-actions[bot]) wrote it.
+          comment_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR/comments" \
+            | jq -rs '[add[] | select(.user.login == "github-actions[bot]" and (.body | contains(env.MARKER)))][0].id // empty')
+
+          if (( total > budget )); then
+            # Create the label the first time (GitHub answers 422 when it already exists).
+            gh api "repos/$GH_REPO/labels" -f name="$LABEL" -f color=d93f0b \
+              -f description="Over the PR size budget: split it or give a reason" >/dev/null 2>&1 || true
+            jq -n --arg l "$LABEL" '{labels: [$l]}' | gh api "repos/$GH_REPO/issues/$PR/labels" --input - >/dev/null
+            body="$MARKER
+          **This PR changes $total lines**, over the budget of $budget (lockfiles, snapshots and generated code aren't counted).
+
+          A PR this size tends to get skimmed rather than reviewed. Please split it (a prefactor first, then the behaviour change; or one PR per step of expand → migrate → contract), or reply with the reason it has to be one PR."
+            if [ -n "$comment_id" ]; then
+              gh api -X PATCH "repos/$GH_REPO/issues/comments/$comment_id" -f body="$body" >/dev/null
+            else
+              gh api "repos/$GH_REPO/issues/$PR/comments" -f body="$body" >/dev/null
+            fi
+          else
+            # GitHub answers 404 when the label isn't on the PR: that's fine.
+            gh api -X DELETE "repos/$GH_REPO/issues/$PR/labels/${LABEL//\//%2F}" >/dev/null 2>&1 || true
+            if [ -n "$comment_id" ]; then
+              gh api -X DELETE "repos/$GH_REPO/issues/comments/$comment_id" >/dev/null
+            fi
+          fi

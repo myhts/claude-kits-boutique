@@ -9,7 +9,7 @@ Claude did, what we decided, the evidence, what it cost, and what didn't work, w
 | 1 Who reads the code | choosing an agent's model by a test, not by taste | [01-who-reads-the-code.md](01-who-reads-the-code.md) · [ADR 0001](adr/0001-explorer-readers-on-sonnet.md) |
 | 2 The architecture | `/project-explorer`: the map, and flows run for real or traced from code | [02-the-architecture.md](02-the-architecture.md) · [the live explorer](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html) |
 | 2b The whole shop | every service run; each traced bug made to happen through the real shop | [02b-the-whole-shop.md](02b-the-whole-shop.md) |
-| 3 Set up the flow | `/setup-project` on a five-language repository | to come |
+| 3 Set up the flow | `/setup-project` on a five-language repository | [03-set-up-the-flow.md](03-set-up-the-flow.md) |
 | 4 Features, end to end | plan, spec, tickets, test-first build, reviewers, human review | to come |
 | 5 The reviewers | the reviewers on real code with planted defects | to come |
 | 6 Ship it | images per changed service, `/deploy`, rollout and undo | to come |

@@ -1,0 +1,134 @@
+# .github/workflows/ci.yml: builds and tests every service on each pull request and each push to main. Written by
+# claude-kits' /setup-project (Stage 3); Google's own workflows (ci-pr.yaml and the rest) stay disabled because they
+# need Google Cloud credentials.
+# No path filters, on purpose: a required check that a filter skips never reports, and the PR waits for it forever.
+# The ruleset on main requires one check from here, `verify`, which passes only when every job above it passed. A new
+# service or job joins `needs:` below and the ruleset doesn't change.
+# Toolchains follow what the repo pins: go.mod (with its toolchain line), the Dockerfiles for .NET, Java, Node and
+# Python. Commands match docs/agents/stack.md.
+# Actions are GitHub-owned only: this repo's Actions settings allow nothing else.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:                     # a newer push to the same PR or branch replaces a run still in progress
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: go (${{ matrix.module }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [checkoutservice, frontend, productcatalogservice, shippingservice]
+    defaults:
+      run:
+        working-directory: src/${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/${{ matrix.module }}/go.mod
+          cache-dependency-path: src/${{ matrix.module }}/go.sum
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^genproto/' || true)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Not gofmt-formatted (run gofmt -w on them):"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        # copylocks is off until protobuf messages stop being passed by value: issue #7.
+        run: go vet -copylocks=false ./...
+      - name: go test
+        run: go test ./...
+
+  dotnet:
+    name: dotnet (cartservice)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0'
+      - name: dotnet test
+        run: dotnet test src/cartservice/
+
+  java:
+    name: java (adservice)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/adservice
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+          cache-dependency-path: src/adservice/build.gradle
+      - name: gradle build (compiles, tests, verifyGoogleJavaFormat)
+        run: sh gradlew --no-daemon build
+
+  node:
+    name: node (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [currencyservice, paymentservice]
+    defaults:
+      run:
+        working-directory: src/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/${{ matrix.service }}/package-lock.json
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+      - name: syntax check (no tests yet)
+        run: git ls-files '*.js' | xargs -n1 node --check
+
+  python:
+    name: python (all services)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: byte-compile (no tests yet; dependencies aren't installed)
+        run: python -m compileall -q src/emailservice src/recommendationservice src/shoppingassistantservice src/loadgenerator
+
+  verify:
+    # The one check main requires. always() so it reports even when a job above failed or was skipped: a skipped
+    # required check would otherwise count as passing.
+    if: always()
+    needs: [go, dotnet, java, node, python]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = success ] || { echo "::error::a job ended '$r'"; exit 1; }
+          done
