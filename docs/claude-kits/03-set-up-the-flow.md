@@ -94,11 +94,35 @@ runs `go vet -copylocks=false` until issue #7 is done.
   before and after the prefactor. The PR bodies carry the before/after output.
 - `pr-size`'s skip list was tested against real paths: `genproto/demo.pb.go`, `demo_pb2.py`, `demo_pb2_grpc.py` and
   `package-lock.json` skipped; `handlers.go` and `email_server.py` counted.
-- CI on the setup PR: [to be filled in from the first run].
+- CI on the setup PR ([PR #8](https://github.com/myhts/claude-kits-boutique/pull/8), first run): all 11 checks
+  green in about 1½ minutes. `setup-go` read Go 1.27.1 from the `toolchain` line, and `java (adservice)` built and
+  format-checked on Temurin 25.0.5, the first JDK 25 run.
+
+  ```text
+  go (checkoutservice)        pass  44s     java (adservice)       pass  38s
+  go (frontend)               pass  1m2s    node (currencyservice) pass  22s
+  go (productcatalogservice)  pass  1m0s    node (paymentservice)  pass  20s
+  go (shippingservice)        pass  1m0s    python (all services)  pass   7s
+  dotnet (cartservice)        pass  27s     verify                 pass   2s
+  size                        pass   5s     → labelled size/large: 739 lines, over 400
+  ```
+
+- `pr-size` labelled the PR and asked for a split or a reason. The reason went in a reply: no application code, and
+  the files only work together.
+- **Not yet shown:** `verify` failing when a job fails, and `human-review`, which can't run until it's on `main`.
+  Stage 4's first PR exercises both.
 
 ## What it cost
 
-[to be filled in at the end of the stage]
+From `/pipeline:setup-project` to this page took about 2½ hours of wall time (most of it waiting on answers, toolchain
+downloads and CI) and came to **$3.92 at list price**: 63 calls, all on Opus 5.5, no subagents. Priced with Stage
+2b's [`run-cost.mjs`](evidence/stage-2b/run-cost.mjs).
+
+| Who | Model | Calls | List price |
+|---|---|---|---|
+| The main session: exploring, every command run, the prefactor, the setup, both PRs, this page | Opus 5.5 | 63 | $3.92 |
+
+It ran on a Claude Max plan, so nothing extra was billed.
 
 ## What didn't work, and the fix
 
