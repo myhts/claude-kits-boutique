@@ -227,6 +227,6 @@ New tools: `docs/explorer/shop-session.sh` (scenarios `order`, `amex`, `ars`, `n
 
 ## Next
 
-- Commit `docs/explorer/` and the Stage 2b page on branch `claude-kits-test-2b`, and open a PR (ask first).
+- Done: PR #5 (`claude-kits-test-2b`) adds Stage 2b. Merging it republishes the explorer.
 - The engine notes above as a PR to claude-kits, then link it from the Stage 2 page's last section.
 - Stage B, if wanted: Go (Delve), C# and Python debuggers, which need images built from source.
