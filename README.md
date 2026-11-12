@@ -37,7 +37,7 @@ through with a debugger. Nobody asked it to hunt for bugs. It found them anyway,
 | **1 Who reads the code** | Cheaper Sonnet readers found everything Opus found, at about half the cost | Done | [Page](docs/claude-kits/01-who-reads-the-code.md) · [ADR 0001](docs/claude-kits/adr/0001-explorer-readers-on-sonnet.md) |
 | **2 The architecture** | `/project-explorer`: the map, flows run for real or traced from code, concept ladders and labs | Done | [Page](docs/claude-kits/02-the-architecture.md) · [Live explorer](https://myhts.github.io/claude-kits-boutique/explorer/explorer.html) |
 | **2b The whole shop** | All 11 services run; every traced bug made to happen through the real shop | Done | [Page](docs/claude-kits/02b-the-whole-shop.md) |
-| **3 Set up the flow** | `/setup-project` on five languages: every command run before it was written down, five failing checks fixed first, `main` gated on `verify` and `human-review` | Done | [Page](docs/claude-kits/03-set-up-the-flow.md) · [Feedback (9 issues)](docs/claude-kits/03-set-up-the-flow.md#feedback-for-claude-kits) |
+| **3 Set up the flow** | `/setup-project` on five languages: every command run before it was written down, five failing checks found (four fixed first, one tracked in [#7](https://github.com/myhts/claude-kits-boutique/issues/7)), `main` gated on `verify` and `human-review` | Done | [Page](docs/claude-kits/03-set-up-the-flow.md) · [Feedback (9 issues)](docs/claude-kits/03-set-up-the-flow.md#feedback-for-claude-kits) |
 | 4 Features, end to end | plan, spec, tickets, test-first build, reviewers, human review | Next | |
 | 5 The reviewers | the reviewers on real code with planted defects | To come | |
 | 6 Ship it | images per changed service, `/deploy`, rollout and undo | To come | |
